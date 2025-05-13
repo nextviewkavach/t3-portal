@@ -1,7 +1,23 @@
 {
-  "name": "my-bun-app",
+  "name": "t3-portal",
   "version": "1.0.0",
+  "description": "A Bun-based application using ElysiaJS.",
+  "main": "m10.ts",
   "scripts": {
-    "start": "bun m10.ts"
+    "start": "bun m10.ts",
+    "dev": "bun m10.ts --watch",
+    "build": "echo 'No build step required for Bun-based projects'"
+  },
+  "dependencies": {
+    "elysia": "^0.5.0",
+    "@elysiajs/cors": "^0.2.0",
+    "knex": "^2.4.2",
+    "sqlite3": "^5.1.6"
+  },
+  "devDependencies": {},
+  "author": "nextviewkavach",
+  "license": "MIT",
+  "engines": {
+    "bun": ">=0.5.0"
   }
 }
