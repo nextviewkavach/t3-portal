@@ -1,0 +1,7 @@
+{
+  "name": "my-bun-app",
+  "version": "1.0.0",
+  "scripts": {
+    "start": "bun m10.ts"
+  }
+}
