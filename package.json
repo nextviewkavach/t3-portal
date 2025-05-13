@@ -1,23 +1,24 @@
 {
-  "name": "t3-portal",
+  "name": "portal-backend",
   "version": "1.0.0",
-  "description": "A Bun-based application using ElysiaJS.",
+  "description": "Product registration portal backend API",
   "main": "m10.ts",
+  "type": "module",
   "scripts": {
-    "start": "bun m10.ts",
-    "dev": "bun m10.ts --watch",
-    "build": "echo 'No build step required for Bun-based projects'"
+    "start": "bun run m10.ts",
+    "dev": "bun --hot run m10.ts",
+    "build": "bun build m10.ts --target=bun --outfile=dist/index.js"
   },
   "dependencies": {
-    "elysia": "^0.5.0",
-    "@elysiajs/cors": "^0.2.0",
-    "knex": "^2.4.2",
-    "sqlite3": "^5.1.6"
+    "elysia": "^0.7.x",
+    "@elysiajs/cors": "^0.7.x",
+    "knex": "^2.5.x",
+    "sqlite3": "^5.1.x"
   },
-  "devDependencies": {},
-  "author": "nextviewkavach",
-  "license": "MIT",
+  "devDependencies": {
+    "bun-types": "latest"
+  },
   "engines": {
-    "bun": ">=0.5.0"
+    "bun": ">=1.0.0"
   }
 }
