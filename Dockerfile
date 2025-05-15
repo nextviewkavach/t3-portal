@@ -44,7 +44,7 @@ WORKDIR /app
 COPY --from=builder /app/app .
 
 # Create directories that might be needed
-# Create data directories in both potential locations
+# These directories will be used as mount points for persistent volumes
 RUN mkdir -p /data /data/bills /data/logs /data/backups
 RUN mkdir -p /app/data /app/data/bills /app/data/logs /app/data/backups
 
@@ -52,8 +52,12 @@ RUN mkdir -p /app/data /app/data/bills /app/data/logs /app/data/backups
 ENV DATA_DIR=/data
 ENV GIN_MODE=release
 
-# Set permissions
+# Set permissions for volume mount points
 RUN chmod -R 777 /data
+
+# Define volumes - This is the key change to ensure data persistence
+# These directories will be preserved between container rebuilds
+VOLUME ["/data", "/data/bills", "/data/logs", "/data/backups"]
 
 # Expose the port
 EXPOSE 8080
