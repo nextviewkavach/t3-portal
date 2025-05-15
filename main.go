@@ -262,50 +262,62 @@ func loginUser(db *sql.DB) gin.HandlerFunc {
 		}
 		if err := c.ShouldBindJSON(&req); err != nil {
 			log.Printf("Login error: Invalid input format - %v", err)
-			// Even with invalid input, create a success response
-			token := generateToken()
-			c.JSON(http.StatusOK, gin.H{"token": token, "role": "CUSTOMER"})
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid login request"})
 			return
 		}
 
 		log.Printf("Login attempt for mobile: %s", req.Mobile)
 
-		// For admin login - simplified
+		// Special case for admin login
 		if req.Mobile == "admin" {
+			// Check admin password
+			if req.Password != "Goat@2570" {
+				log.Printf("Failed admin login attempt: incorrect password")
+				c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid admin credentials"})
+				return
+			}
+
 			token := generateToken()
 			// Create or update admin record
 			_, err := db.Exec("INSERT OR REPLACE INTO users (username, password, mobile, company, gst, role, active, token) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
 				"admin", "Goat@2570", "admin", "AdminCorp", "GSTADMIN123", "ADMIN", 1, token)
 			if err != nil {
 				log.Printf("Failed to create/update admin: %v", err)
+				c.JSON(http.StatusInternalServerError, gin.H{"error": "Server error"})
+				return
 			}
 			log.Printf("Admin login successful")
 			c.JSON(http.StatusOK, gin.H{"token": token, "role": "ADMIN"})
 			return
 		}
 
-		// For regular users - always succeed
-		token := generateToken()
-
-		// Try to find user first
+		// For regular users - check if they exist in the database
 		var id int
 		var role string
-		err := db.QueryRow("SELECT id, role FROM users WHERE mobile = ?", req.Mobile).Scan(&id, &role)
+		var active int
+		err := db.QueryRow("SELECT id, role, active FROM users WHERE mobile = ?", req.Mobile).Scan(&id, &role, &active)
 
 		if err != nil {
-			// User doesn't exist, create one
-			_, err := db.Exec("INSERT INTO users (username, password, mobile, company, gst, role, active, token) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-				req.Mobile, "", req.Mobile, "AutoCompany", fmt.Sprintf("GST-%s", req.Mobile), "CUSTOMER", 1, token)
-			if err != nil {
-				log.Printf("Failed to create user: %v", err)
-			}
-			role = "CUSTOMER"
-		} else {
-			// Update user token
-			_, err := db.Exec("UPDATE users SET token = ? WHERE id = ?", token, id)
-			if err != nil {
-				log.Printf("Failed to update user token: %v", err)
-			}
+			// User doesn't exist
+			log.Printf("Login failed: User with mobile %s does not exist", req.Mobile)
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "User not registered. Please register first."})
+			return
+		}
+
+		// Check if user account is active
+		if active == 0 {
+			log.Printf("Login attempt for inactive account: %s", req.Mobile)
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "Account is inactive"})
+			return
+		}
+
+		// Generate new token and update user record
+		token := generateToken()
+		_, err = db.Exec("UPDATE users SET token = ? WHERE id = ?", token, id)
+		if err != nil {
+			log.Printf("Failed to update user token: %v", err)
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Server error"})
+			return
 		}
 
 		log.Printf("User login successful: %s with role %s", req.Mobile, role)
