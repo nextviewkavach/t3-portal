@@ -15,9 +15,9 @@ RUN go mod download
 # Copy the source code
 COPY . .
 
-# Build with CGO enabled
+# Build with CGO enabled and special build tags for SQLite on Alpine
 ENV CGO_ENABLED=1
-RUN go build -o app .
+RUN go build -tags "linux,musl" -o app .
 
 # Final stage
 FROM alpine:latest
