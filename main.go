@@ -28,7 +28,7 @@ func setupEnvironment() {
 	if _, err := os.Stat("/mnt/logs"); os.IsNotExist(err) {
 		os.Mkdir("/mnt/logs", 0755)
 	}
-	logFile, err := os.OpenFile("logs/portal.log", os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)
+	logFile, err := os.OpenFile("mnt/logs/portal.log", os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)
 	if err != nil {
 		panic(err)
 	}
