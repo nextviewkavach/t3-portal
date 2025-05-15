@@ -551,11 +551,16 @@ func registerProduct(db *sql.DB) gin.HandlerFunc {
 
 		log.Printf("Bill file saved at: %s", billPath)
 
+		// Store relative URL path instead of filesystem path
+		// This will match the URL used by the static file server
+		// Use the proper URL path that matches our /bills static route
+		billUrlPath := fmt.Sprintf("/bills/%s", billFilename)
+
 		// Register each serial with the same bill file
 		registeredSerials := []string{}
 		for _, serial := range serials {
 			_, err = db.Exec("INSERT INTO registrations (user_id, product_id, serial, bill_file, status, created_at) VALUES (?, ?, ?, ?, ?, ?)",
-				userID, productID, serial, billPath, "pending", time.Now())
+				userID, productID, serial, billUrlPath, "pending", time.Now())
 
 			if err == nil {
 				registeredSerials = append(registeredSerials, serial)
@@ -634,18 +639,39 @@ func updateRegistration(db *sql.DB) gin.HandlerFunc {
 func deleteBillFile(db *sql.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		id := c.Param("id")
-		var bill string
-		err := db.QueryRow("SELECT bill_file FROM registrations WHERE id=?", id).Scan(&bill)
-		if err != nil || bill == "" {
+		var billPath string
+		err := db.QueryRow("SELECT bill_file FROM registrations WHERE id=?", id).Scan(&billPath)
+		if err != nil || billPath == "" {
 			c.JSON(http.StatusNotFound, gin.H{"error": "Bill not found"})
 			return
 		}
-		os.Remove(bill)
+
+		// Extract the filename from the URL path
+		fileName := filepath.Base(billPath)
+
+		// Get data directory
+		dataDir := os.Getenv("DATA_DIR")
+		if dataDir == "" {
+			dataDir = "data" // Fallback
+		}
+
+		// Construct the actual filesystem path
+		fullPath := filepath.Join(dataDir, "bills", fileName)
+
+		// Delete the physical file
+		err = os.Remove(fullPath)
+		if err != nil {
+			log.Printf("Warning: Could not delete bill file %s: %v", fullPath, err)
+			// Continue anyway to update the database
+		}
+
+		// Clear the bill_file field in the database
 		_, err = db.Exec("UPDATE registrations SET bill_file='' WHERE id=?", id)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "DB error"})
 			return
 		}
+
 		log.Printf("Admin deleted bill file for registration %s", id)
 		c.JSON(http.StatusOK, gin.H{"status": "bill deleted"})
 	}
@@ -1283,8 +1309,15 @@ func main() {
 
 	r.Use(setupCORS())
 
-	// Serve bill files statically
-	r.Static("/bills", "./bills")
+	// Get data directory for bill files
+	dataDir := os.Getenv("DATA_DIR")
+	if dataDir == "" {
+		dataDir = "data" // Fallback
+	}
+	billsDir := filepath.Join(dataDir, "bills")
+
+	// Serve bill files statically - FIX PATH TO MATCH CLIENT REQUESTS
+	r.Static("/bills", billsDir)
 
 	r.GET("/", func(c *gin.Context) {
 		c.String(http.StatusOK, "Portal System API is running.")
