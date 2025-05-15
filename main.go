@@ -24,30 +24,77 @@ func setupEnvironment() {
 	loc, _ := time.LoadLocation("Asia/Kolkata")
 	time.Local = loc
 
-	// Prepare data directory
-	if _, err := os.Stat("data"); os.IsNotExist(err) {
-		os.Mkdir("data", 0755)
+	// Get data directory from environment or use default
+	dataDir := os.Getenv("DATA_DIR")
+	if dataDir == "" {
+		// For Railway, which might restrict directory creation in some paths
+		// Try to use /tmp which is typically writable
+		if _, err := os.Stat("/tmp"); err == nil {
+			dataDir = "/tmp/portal-data"
+		} else {
+			dataDir = "data"
+		}
 	}
 
-	// Prepare logs in data directory
-	if _, err := os.Stat("data/logs"); os.IsNotExist(err) {
-		os.Mkdir("data/logs", 0755)
+	// Prepare data directory
+	if _, err := os.Stat(dataDir); os.IsNotExist(err) {
+		os.MkdirAll(dataDir, 0755)
 	}
-	logFile, err := os.OpenFile("data/logs/portal.log", os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)
+
+	// Store the data directory path for use in other functions
+	os.Setenv("DATA_DIR", dataDir)
+
+	// Prepare logs directory
+	logsDir := filepath.Join(dataDir, "logs")
+	if _, err := os.Stat(logsDir); os.IsNotExist(err) {
+		os.MkdirAll(logsDir, 0755)
+	}
+
+	logFile, err := os.OpenFile(filepath.Join(logsDir, "portal.log"), os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)
 	if err != nil {
-		panic(err)
+		// Fallback to stdout if we can't write to a log file
+		log.SetOutput(os.Stdout)
+		log.Printf("WARNING: Could not open log file, logging to stdout: %v", err)
+	} else {
+		log.SetOutput(logFile)
 	}
-	log.SetOutput(logFile)
+
+	// Also prepare bills and backups directories
+	os.MkdirAll(filepath.Join(dataDir, "bills"), 0755)
+	os.MkdirAll(filepath.Join(dataDir, "backups"), 0755)
+
+	log.Printf("Environment setup complete. Using data directory: %s", dataDir)
 }
 
 func setupDatabase() *sql.DB {
-	if _, err := os.Stat("data"); os.IsNotExist(err) {
-		os.Mkdir("data", 0755)
+	// Use the data directory from environment
+	dataDir := os.Getenv("DATA_DIR")
+	if dataDir == "" {
+		dataDir = "data" // Fallback
 	}
-	db, err := sql.Open("sqlite3", "data/portal.db")
+
+	// Ensure the directory exists
+	if _, err := os.Stat(dataDir); os.IsNotExist(err) {
+		err := os.MkdirAll(dataDir, 0755)
+		if err != nil {
+			log.Fatalf("Failed to create data directory: %v", err)
+		}
+	}
+
+	// Database file path
+	dbPath := filepath.Join(dataDir, "portal.db")
+	log.Printf("Using database at: %s", dbPath)
+
+	// Open the database
+	db, err := sql.Open("sqlite3", dbPath)
 	if err != nil {
-		log.Fatal(err)
+		log.Fatalf("Failed to open database: %v", err)
 	}
+
+	// Set pragmas for better performance
+	db.Exec("PRAGMA journal_mode=WAL;")
+	db.Exec("PRAGMA synchronous=NORMAL;")
+
 	// Create tables if not exist
 	db.Exec(`CREATE TABLE IF NOT EXISTS users (
 		id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -81,6 +128,14 @@ func setupDatabase() *sql.DB {
 		user_id INTEGER,
 		login_time DATETIME
 	)`)
+
+	// Test the database connection
+	if err := db.Ping(); err != nil {
+		log.Printf("WARNING: Database ping failed: %v", err)
+	} else {
+		log.Printf("Database connection successful")
+	}
+
 	return db
 }
 
@@ -468,10 +523,20 @@ func registerProduct(db *sql.DB) gin.HandlerFunc {
 			return
 		}
 
-		// Save bill file in data/bills directory
-		billDir := "data/bills"
+		// Get data directory from environment
+		dataDir := os.Getenv("DATA_DIR")
+		if dataDir == "" {
+			dataDir = "data" // Fallback
+		}
+
+		// Save bill file in the bills directory under data dir
+		billDir := filepath.Join(dataDir, "bills")
 		if _, err := os.Stat(billDir); os.IsNotExist(err) {
-			os.Mkdir(billDir, 0755)
+			if err := os.MkdirAll(billDir, 0755); err != nil {
+				log.Printf("Error creating bills directory: %v", err)
+				c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create bills directory"})
+				return
+			}
 		}
 
 		timestamp := time.Now().UnixNano()
@@ -479,9 +544,12 @@ func registerProduct(db *sql.DB) gin.HandlerFunc {
 		billPath := filepath.Join(billDir, billFilename)
 
 		if err := c.SaveUploadedFile(file, billPath); err != nil {
+			log.Printf("Error saving uploaded file: %v", err)
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "File save failed"})
 			return
 		}
+
+		log.Printf("Bill file saved at: %s", billPath)
 
 		// Register each serial with the same bill file
 		registeredSerials := []string{}
@@ -491,6 +559,8 @@ func registerProduct(db *sql.DB) gin.HandlerFunc {
 
 			if err == nil {
 				registeredSerials = append(registeredSerials, serial)
+			} else {
+				log.Printf("Error registering serial %s: %v", serial, err)
 			}
 		}
 
