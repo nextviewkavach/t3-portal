@@ -44,7 +44,7 @@ WORKDIR /app
 COPY --from=builder /app/app .
 
 # Create directories that might be needed
-# These directories will be used as mount points for persistent volumes
+# These directories will be used as mount points for Railway's persistent volumes
 RUN mkdir -p /data /data/bills /data/logs /data/backups
 RUN mkdir -p /app/data /app/data/bills /app/data/logs /app/data/backups
 
@@ -53,11 +53,11 @@ ENV DATA_DIR=/data
 ENV GIN_MODE=release
 
 # Set permissions for volume mount points
+# This ensures the app has write access to the directories when mounted by Railway
 RUN chmod -R 777 /data
 
-# Define volumes - This is the key change to ensure data persistence
-# These directories will be preserved between container rebuilds
-VOLUME ["/data", "/data/bills", "/data/logs", "/data/backups"]
+# Note: We're NOT using Docker VOLUME directive here
+# Railway will handle the volume mounts through its own configuration
 
 # Expose the port
 EXPOSE 8080
