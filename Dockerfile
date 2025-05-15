@@ -44,11 +44,16 @@ WORKDIR /app
 COPY --from=builder /app/app .
 
 # Create directories that might be needed
+# Create data directories in both potential locations
+RUN mkdir -p /data /data/bills /data/logs /data/backups
 RUN mkdir -p /app/data /app/data/bills /app/data/logs /app/data/backups
 
 # Set environment variables
-ENV DATA_DIR=/app/data
+ENV DATA_DIR=/data
 ENV GIN_MODE=release
+
+# Set permissions
+RUN chmod -R 777 /data
 
 # Expose the port
 EXPOSE 8080
