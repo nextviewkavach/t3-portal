@@ -1,42 +1,44 @@
-# Stage 1: Build the Go application using Go 1.21
+# Stage 1: Build the Go app using Go 1.21
 FROM golang:1.21-alpine AS builder
 
 # Set environment variables for Go build
-ENV GO111MODULE=on \
-    CGO_ENABLED=0 \
+ENV CGO_ENABLED=0 \
     GOOS=linux \
-    GOARCH=amd64
+    GOARCH=amd64 \
+    GO111MODULE=on
 
 # Set the working directory
 WORKDIR /app
 
-# Copy go.mod and go.sum (if they exist) and download dependencies
+# Copy module files first (for caching dependencies)
 COPY go.mod go.sum ./
-RUN go mod download
 
-# Copy the rest of the application
+# Download dependencies (fail with debug info if needed)
+RUN go mod download || (cat go.mod && cat go.sum && exit 1)
+
+# Copy the rest of the application source code
 COPY . .
 
 # Build the Go binary
 RUN go build -o main .
 
-# Stage 2: Create a minimal image to run the app
+# Stage 2: Minimal runtime image
 FROM alpine:latest
 
 # Install CA certificates for HTTPS support
 RUN apk --no-cache add ca-certificates
 
-# Create necessary persistent folders under /mnt (Railway persistent volume mount)
+# Create necessary persistent folders in Railway's mounted volume
 RUN mkdir -p /mnt/data /mnt/logs /mnt/bills /mnt/backups
 
-# Set working directory for runtime
+# Set working directory
 WORKDIR /root/
 
-# Copy the compiled Go binary from builder
+# Copy binary from builder
 COPY --from=builder /app/main .
 
 # Expose the port your app runs on
 EXPOSE 8080
 
-# Run the binary
+# Command to run the app
 CMD ["./main"]
