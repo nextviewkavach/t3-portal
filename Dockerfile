@@ -1,4 +1,18 @@
-FROM golang:1.20 AS builder
+FROM debian:bullseye AS builder
+
+# Install Go 1.20
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    ca-certificates \
+    curl \
+    gcc \
+    libc6-dev \
+    make \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install Go 1.20
+ENV GO_VERSION=1.20.7
+RUN curl -sSL https://golang.org/dl/go${GO_VERSION}.linux-amd64.tar.gz | tar -C /usr/local -xz
+ENV PATH=$PATH:/usr/local/go/bin
 
 # Set working directory
 WORKDIR /app
@@ -16,8 +30,8 @@ COPY . .
 ENV CGO_ENABLED=1
 RUN go build -o app .
 
-# Final stage - using Debian instead of Alpine to avoid musl libc issues
-FROM debian:bullseye-slim
+# Final stage - using the same Debian version
+FROM debian:bullseye
 
 # Install runtime dependencies
 RUN apt-get update && apt-get install -y --no-install-recommends \
