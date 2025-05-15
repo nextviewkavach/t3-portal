@@ -1,26 +1,39 @@
-# Use latest Bun image
-FROM oven/bun:1.1.13
-
-# Set working directory
-WORKDIR /app
-
-# Copy package files and install dependencies
-COPY package.json ./
-RUN bun install
-
-# Copy application code
-COPY . .
-
-# Create directory structure for the volume
-RUN mkdir -p /app/data/uploads
+# Start from the official Go image
+FROM golang:1.21-alpine
 
 # Set environment variables
-ENV PORT=8000
-ENV DATABASE_FILE_PATH=/app/data/portal.db
-ENV UPLOADS_DIR=/app/data/uploads
+ENV GO111MODULE=on \
+    CGO_ENABLED=0 \
+    GOOS=linux \
+    GOARCH=amd64
 
-# Expose port 8000
-EXPOSE 8000
+# Set the working directory inside the container
+WORKDIR /app
 
-# Start the application
-CMD ["bun", "run", "start"]
+# Copy go.mod and go.sum first (for caching dependencies)
+COPY go.mod ./
+COPY go.sum ./
+
+# Download dependencies
+RUN go mod download
+
+# Copy the rest of the application
+COPY . .
+
+# Build the Go app
+RUN go build -o main .
+
+# Use a minimal base image to run the application
+FROM alpine:latest  
+RUN apk --no-cache add ca-certificates
+
+WORKDIR /root/
+
+# Copy binary from builder
+COPY --from=0 /app/main .
+
+# Expose port (if applicable)
+EXPOSE 8080
+
+# Command to run the application
+CMD ["./main"]
