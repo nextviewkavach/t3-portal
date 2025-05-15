@@ -1,7 +1,4 @@
-FROM golang:1.20-alpine AS builder
-
-# Install build dependencies
-RUN apk add --no-cache gcc musl-dev
+FROM golang:1.20 AS builder
 
 # Set working directory
 WORKDIR /app
@@ -15,15 +12,18 @@ RUN go mod download
 # Copy the source code
 COPY . .
 
-# Build with CGO enabled and special build tags for SQLite on Alpine
+# Build with CGO enabled
 ENV CGO_ENABLED=1
-RUN go build -tags "linux,musl" -o app .
+RUN go build -o app .
 
-# Final stage
-FROM alpine:latest
+# Final stage - using Debian instead of Alpine to avoid musl libc issues
+FROM debian:bullseye-slim
 
 # Install runtime dependencies
-RUN apk add --no-cache ca-certificates tzdata libc6-compat
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    ca-certificates \
+    tzdata \
+    && rm -rf /var/lib/apt/lists/*
 
 # Copy binary from builder
 WORKDIR /app
