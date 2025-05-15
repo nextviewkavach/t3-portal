@@ -27,11 +27,14 @@ func setupEnvironment() {
 	// Get data directory from environment or use default
 	dataDir := os.Getenv("DATA_DIR")
 	if dataDir == "" {
-		// For Railway, which might restrict directory creation in some paths
-		// Try to use /tmp which is typically writable
-		if _, err := os.Stat("/tmp"); err == nil {
+		// For Railway deployment - use the standard mounted volume path
+		if _, err := os.Stat("/data"); err == nil {
+			dataDir = "/data"
+		} else if _, err := os.Stat("/tmp"); err == nil {
+			// Fallback to /tmp if available
 			dataDir = "/tmp/portal-data"
 		} else {
+			// Local development fallback
 			dataDir = "data"
 		}
 	}
@@ -552,9 +555,8 @@ func registerProduct(db *sql.DB) gin.HandlerFunc {
 		log.Printf("Bill file saved at: %s", billPath)
 
 		// Store relative URL path instead of filesystem path
-		// This will match the URL used by the static file server
-		// Use the proper URL path that matches our /bills static route
-		billUrlPath := fmt.Sprintf("/bills/%s", billFilename)
+		// Use a format without leading slash to avoid double slash issues
+		billUrlPath := fmt.Sprintf("bills/%s", billFilename)
 
 		// Register each serial with the same bill file
 		registeredSerials := []string{}
@@ -927,37 +929,55 @@ func downloadBillsByUser(db *sql.DB) gin.HandlerFunc {
 		var currentMobile string
 		var fileCount int = 0
 
+		// Get data directory
+		dataDir := os.Getenv("DATA_DIR")
+		if dataDir == "" {
+			dataDir = "data" // Fallback
+		}
+
 		// Add files to zip grouped by mobile
 		for rows.Next() {
-			var mobile, serial, productName, billFile, createdAt string
+			var mobile, serial, productName, billUrlPath, createdAt string
 			var regId int
-			rows.Scan(&mobile, &regId, &serial, &productName, &billFile, &createdAt)
+			rows.Scan(&mobile, &regId, &serial, &productName, &billUrlPath, &createdAt)
+
+			// Extract filename from URL path
+			billFilename := filepath.Base(billUrlPath)
+
+			// Construct the full filesystem path
+			billFullPath := filepath.Join(dataDir, "bills", billFilename)
+
+			log.Printf("Looking for bill file at: %s", billFullPath)
 
 			// Skip if file doesn't exist
-			if _, err := os.Stat(billFile); os.IsNotExist(err) {
+			if _, err := os.Stat(billFullPath); os.IsNotExist(err) {
+				log.Printf("Bill file not found: %s", billFullPath)
 				continue
 			}
 
 			// Read the bill file
-			fileData, err := os.ReadFile(billFile)
+			fileData, err := os.ReadFile(billFullPath)
 			if err != nil {
+				log.Printf("Error reading bill file: %v", err)
 				continue // Skip if file can't be read
 			}
 
 			// Add file to zip in user folder
 			folderName := fmt.Sprintf("%s", mobile)
-			fileName := fmt.Sprintf("%s/%s-%s-%s%s", folderName, createdAt[:10], serial, productName, filepath.Ext(billFile))
+			fileName := fmt.Sprintf("%s/%s-%s-%s%s", folderName, createdAt[:10], serial, productName, filepath.Ext(billFilename))
 
 			// Sanitize filename
 			fileName = strings.ReplaceAll(fileName, " ", "_")
 
 			fileWriter, err := zipWriter.Create(fileName)
 			if err != nil {
+				log.Printf("Error creating zip entry: %v", err)
 				continue // Skip if creating file in zip fails
 			}
 
 			_, err = fileWriter.Write(fileData)
 			if err != nil {
+				log.Printf("Error writing to zip: %v", err)
 				continue // Skip if writing fails
 			}
 
