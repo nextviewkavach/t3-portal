@@ -25,10 +25,10 @@ func setupEnvironment() {
 	time.Local = loc
 
 	// Prepare logging
-	if _, err := os.Stat("/mnt/logs"); os.IsNotExist(err) {
-		os.Mkdir("/mnt/logs", 0755)
+	if _, err := os.Stat("logs"); os.IsNotExist(err) {
+		os.Mkdir("logs", 0755)
 	}
-	logFile, err := os.OpenFile("mnt/logs/portal.log", os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)
+	logFile, err := os.OpenFile("logs/portal.log", os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)
 	if err != nil {
 		panic(err)
 	}
@@ -36,10 +36,10 @@ func setupEnvironment() {
 }
 
 func setupDatabase() *sql.DB {
-	if _, err := os.Stat("/mnt/data"); os.IsNotExist(err) {
-		os.Mkdir("/mnt/data", 0755)
+	if _, err := os.Stat("data"); os.IsNotExist(err) {
+		os.Mkdir("data", 0755)
 	}
-	db, err := sql.Open("sqlite3", "/mnt/data/portal.db")
+	db, err := sql.Open("sqlite3", "data/portal.db")
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -432,7 +432,7 @@ func registerProduct(db *sql.DB) gin.HandlerFunc {
 		}
 
 		// Save bill file
-		billDir := "/mnt/bills"
+		billDir := "bills"
 		if _, err := os.Stat(billDir); os.IsNotExist(err) {
 			os.Mkdir(billDir, 0755)
 		}
@@ -895,7 +895,7 @@ func backupDatabase(db *sql.DB) gin.HandlerFunc {
 		}
 
 		// Create backups directory if it doesn't exist
-		backupDir := "/mnt/backups"
+		backupDir := "backups"
 		if _, err := os.Stat(backupDir); os.IsNotExist(err) {
 			os.Mkdir(backupDir, 0755)
 		}
@@ -905,7 +905,7 @@ func backupDatabase(db *sql.DB) gin.HandlerFunc {
 		backupFileName := filepath.Join(backupDir, fmt.Sprintf("portal_backup_%s.db", timestamp))
 
 		// Copy the database file
-		sourceDB, err := os.Open("/mnt/data/portal.db")
+		sourceDB, err := os.Open("data/portal.db")
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to open source database"})
 			return
@@ -996,7 +996,7 @@ func healthCheck(db *sql.DB) gin.HandlerFunc {
 
 		// Check filesystem access
 		fsStatus := "ok"
-		dirPaths := []string{"/mnt/data", "/mnt/bills", "/mnt/backups", "/mnt/logs"}
+		dirPaths := []string{"data", "bills", "backups", "logs"}
 		inaccessibleDirs := []string{}
 
 		for _, dir := range dirPaths {
