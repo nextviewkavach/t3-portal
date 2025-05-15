@@ -1101,14 +1101,21 @@ func healthCheck(db *sql.DB) gin.HandlerFunc {
 			health["status"] = "degraded"
 		}
 
-		// Check filesystem access
+		// Check filesystem access using DATA_DIR environment variable
 		fsStatus := "ok"
-		dirPaths := []string{"data", "bills", "backups", "logs"}
+		dataDir := os.Getenv("DATA_DIR")
+		if dataDir == "" {
+			dataDir = "data" // Fallback to default
+		}
+
+		// Check subdirectories in the data directory
+		subDirs := []string{"bills", "logs", "backups"}
 		inaccessibleDirs := []string{}
 
-		for _, dir := range dirPaths {
-			if _, err := os.Stat(dir); os.IsNotExist(err) {
-				inaccessibleDirs = append(inaccessibleDirs, dir)
+		for _, dir := range subDirs {
+			dirPath := filepath.Join(dataDir, dir)
+			if _, err := os.Stat(dirPath); os.IsNotExist(err) {
+				inaccessibleDirs = append(inaccessibleDirs, dirPath)
 			}
 		}
 
