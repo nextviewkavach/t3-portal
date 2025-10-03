@@ -1,6 +1,6 @@
 FROM debian:bullseye AS builder
 
-# Install Go 1.200 #
+# Install Go 1.200 ##
 RUN apt-get update && apt-get install -y --no-install-recommends \
     ca-certificates \
     curl \
@@ -64,4 +64,5 @@ EXPOSE 8080
 
 # Run the application
 CMD ["./app"]
+
 
